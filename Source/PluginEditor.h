@@ -33,6 +33,7 @@ private:
     juce::Label ksDestinationPresetTitleLabel;
     juce::Label lowKsProtectTitleLabel;
     juce::Label highKsProtectTitleLabel;
+    juce::Label blockControlCcsTitleLabel;
 
     juce::ComboBox rangeSourceBox;
     juce::ComboBox rangeModeBox;
@@ -42,6 +43,7 @@ private:
     juce::ComboBox ksDestinationPresetBox;
     juce::ComboBox lowKsProtectBox;
     juce::ComboBox highKsProtectBox;
+    juce::ComboBox blockControlCcsBox;
 
     std::unique_ptr<ComboBoxAttachment> rangeSourceAttachment;
     std::unique_ptr<ComboBoxAttachment> rangeModeAttachment;

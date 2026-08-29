@@ -44,7 +44,7 @@ namespace
 OrchNoteMapperAudioProcessorEditor::OrchNoteMapperAudioProcessorEditor (OrchNoteMapperAudioProcessor& p)
     : AudioProcessorEditor (&p), audioProcessor (p)
 {
-    setSize (860, 780);
+    setSize (860, 812);
 
     auto setupDisplayLabel = [this] (juce::Label& label)
     {
@@ -98,6 +98,7 @@ OrchNoteMapperAudioProcessorEditor::OrchNoteMapperAudioProcessorEditor (OrchNote
     setupTitleLabel (ksDestinationPresetTitleLabel, "KS Destination");
     setupTitleLabel (lowKsProtectTitleLabel, "Low KS Protect");
     setupTitleLabel (highKsProtectTitleLabel, "High KS Protect");
+    setupTitleLabel (blockControlCcsTitleLabel, "Block Control CCs");
 
     setupComboBox (rangeSourceBox);
     setupComboBox (rangeModeBox);
@@ -107,6 +108,7 @@ OrchNoteMapperAudioProcessorEditor::OrchNoteMapperAudioProcessorEditor (OrchNote
     setupComboBox (ksDestinationPresetBox);
     setupComboBox (lowKsProtectBox);
     setupComboBox (highKsProtectBox);
+    setupComboBox (blockControlCcsBox);
 
     rangeSourceBox.addItem ("Manual", 1);
     rangeSourceBox.addItem ("Preset", 2);
@@ -167,6 +169,10 @@ OrchNoteMapperAudioProcessorEditor::OrchNoteMapperAudioProcessorEditor (OrchNote
     highKsProtectBox.addItem ("Off", 1);
     highKsProtectBox.addItem ("On", 2);
 
+    blockControlCcsBox.addItem ("Off", 1);
+    blockControlCcsBox.addItem ("CC 20-54 (OrchConductor)", 2);
+    blockControlCcsBox.addItem ("CC 20-64 (OC + MPL)", 3);
+
     rangeSourceBox.setSelectedId (getChoiceParameterIndex (audioProcessor.parameters, "rangeSource") + 1,
                                   juce::dontSendNotification);
 
@@ -187,6 +193,8 @@ OrchNoteMapperAudioProcessorEditor::OrchNoteMapperAudioProcessorEditor (OrchNote
                                    juce::dontSendNotification);
     highKsProtectBox.setSelectedId (getChoiceParameterIndex (audioProcessor.parameters, "highKsProtect") + 1,
                                     juce::dontSendNotification);
+    blockControlCcsBox.setSelectedId (getChoiceParameterIndex (audioProcessor.parameters, "blockControlCcs") + 1,
+                                      juce::dontSendNotification);
 
     rangeSourceBox.onChange = [this]
     {
@@ -233,6 +241,12 @@ OrchNoteMapperAudioProcessorEditor::OrchNoteMapperAudioProcessorEditor (OrchNote
     highKsProtectBox.onChange = [this]
     {
         setChoiceParameterFromComboBox (audioProcessor.parameters, "highKsProtect", highKsProtectBox, 2);
+        timerCallback();
+    };
+
+    blockControlCcsBox.onChange = [this]
+    {
+        setChoiceParameterFromComboBox (audioProcessor.parameters, "blockControlCcs", blockControlCcsBox, 3);
         timerCallback();
     };
 
@@ -295,7 +309,7 @@ void OrchNoteMapperAudioProcessorEditor::resized()
 
     area.removeFromTop (8);
 
-    auto controlArea = area.removeFromTop (238);
+    auto controlArea = area.removeFromTop (270);
 
     auto leftColumn = controlArea.removeFromLeft (424);
     controlArea.removeFromLeft (28);
@@ -317,6 +331,7 @@ void OrchNoteMapperAudioProcessorEditor::resized()
     placeComboRow (leftColumn, rangeModeTitleLabel, rangeModeBox, 168);
     placeComboRow (leftColumn, mappingModeTitleLabel, mappingModeBox, 168);
     placeComboRow (leftColumn, instrumentPresetTitleLabel, instrumentPresetBox, 168);
+    placeComboRow (leftColumn, blockControlCcsTitleLabel, blockControlCcsBox, 168);
 
     placeComboRow (rightColumn, keyswitchModeTitleLabel, keyswitchModeBox, 178);
     placeComboRow (rightColumn, ksDestinationPresetTitleLabel, ksDestinationPresetBox, 178);
@@ -390,6 +405,7 @@ void OrchNoteMapperAudioProcessorEditor::syncComboBoxesFromParameters()
     syncChoice (ksDestinationPresetBox, "ksDestinationPreset");
     syncChoice (lowKsProtectBox, "lowKsProtect");
     syncChoice (highKsProtectBox, "highKsProtect");
+    syncChoice (blockControlCcsBox, "blockControlCcs");
 }
 void OrchNoteMapperAudioProcessorEditor::timerCallback()
 {

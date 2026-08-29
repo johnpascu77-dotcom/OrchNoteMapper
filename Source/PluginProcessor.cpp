@@ -230,6 +230,17 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchNoteMapperAudioProcessor
         24
     ));
 
+    // Scrub the OrchConductor / MPL control-CC zone from the output so it never
+    // reaches the instrument (e.g. HALion Sonic reading CC32 as Bank Select LSB).
+    // By the time MIDI passes this device - the last in the Orch chain - every
+    // upstream Orch plugin has already consumed the CCs it needs. Off by default.
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "blockControlCcs", 1 },
+        "Block Control CCs",
+        juce::StringArray { "Off", "CC 20-54 (OrchConductor)", "CC 20-64 (OC + MPL)" },
+        0
+    ));
+
     return { params.begin(), params.end() };
 }
 
@@ -831,6 +842,21 @@ activeNoteMap[(size_t) mapIndex] = -1;
         else if (message.isAllNotesOff() || message.isAllSoundOff())
         {
             activeNoteMap.fill (-1);
+            processedMidi.addEvent (message, samplePosition);
+        }
+        else if (message.isController())
+        {
+            const int blockMode = getParameterIntValue ("blockControlCcs", 0);
+
+            if (blockMode > 0)
+            {
+                const int hi = blockMode == 1 ? 54 : 64;
+                const int cc = message.getControllerNumber();
+
+                if (cc >= 20 && cc <= hi)
+                    continue; // scrubbed before the instrument
+            }
+
             processedMidi.addEvent (message, samplePosition);
         }
         else

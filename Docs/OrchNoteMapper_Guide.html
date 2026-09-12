@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OrchNoteMapper — Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#15120F; --surface:#1E1A15; --surface-2:#262019; --surface-3:#2E2620;
+    --border:#3A2F22; --border-soft:#2A2319;
+    --text:#EDE6D9; --text-dim:#A79B87; --text-faint:#6E6353;
+    --brass:#D8A94E; --brass-dim:#A67E38;
+    --note:#CB6E47; --note-dim:#8C4C31;
+    --control:#5C93B8; --control-dim:#3E6A85;
+    --sage:#84A672; --sage-dim:#5C7A4E;
+    --violet:#9488B0; --violet-dim:#665C7C;
+    color-scheme: dark;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    background:var(--bg); color:var(--text); margin:0;
+    font-family:"Work Sans", ui-sans-serif, system-ui, sans-serif;
+    line-height:1.55; font-size:15px;
+    background-image: radial-gradient(1100px 480px at 10% -10%, color-mix(in srgb, var(--note) 9%, transparent), transparent 60%);
+  }
+  .wrap{ max-width:1080px; margin:0 auto; padding:36px 26px 70px; }
+  .mono{ font-family:"IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  .crumbs{ font-family:"IBM Plex Mono"; font-size:.7rem; color:var(--text-faint); letter-spacing:.04em; margin-bottom:16px; }
+  .crumbs b{ color:var(--note); font-weight:500; }
+
+  .nameplate{ display:flex; align-items:flex-end; justify-content:space-between; gap:20px; flex-wrap:wrap;
+    padding-bottom:18px; margin-bottom:22px; border-bottom:2px solid var(--border); }
+  .nameplate h1{ font-family:"Big Shoulders Display"; font-weight:800; text-transform:uppercase;
+    font-size:clamp(2.1rem,5vw,3.2rem); line-height:.9; margin:0; letter-spacing:.005em; }
+  .nameplate .role{ color:var(--text-dim); font-size:.92rem; max-width:52ch; margin-top:8px; }
+  .badges{ display:flex; gap:8px; flex-wrap:wrap; }
+  .badge{ font-family:"IBM Plex Mono"; font-size:.66rem; text-transform:uppercase; letter-spacing:.06em;
+    padding:3px 9px; border-radius:20px; white-space:nowrap; }
+  .badge.chain{ color:var(--note); border:1px solid var(--note-dim); background:color-mix(in srgb, var(--note) 14%, transparent); }
+  .badge.live{ color:var(--sage); border:1px solid var(--sage-dim); background:color-mix(in srgb, var(--sage) 14%, transparent); }
+  .badge.plugin-code{ color:var(--text-faint); border:1px dashed var(--text-faint); }
+
+  .lede{ color:var(--text-dim); max-width:74ch; margin:0 0 34px; font-size:.98rem; }
+  .lede strong{ color:var(--text); font-weight:600; }
+
+  .section-head{ display:flex; align-items:baseline; gap:14px; margin:52px 0 18px; }
+  .section-head .num{ font-family:"IBM Plex Mono"; color:var(--text-faint); font-size:.82rem; }
+  .section-head h2{ font-family:"Big Shoulders Display"; font-weight:700; text-transform:uppercase;
+    font-size:1.5rem; margin:0; }
+  .section-head .rule{ flex:1; height:1px; background:var(--border); }
+
+  /* ---- annotated screenshot ---- */
+  .shot-frame{
+    position:relative; border:1px solid var(--border-soft); border-radius:8px; overflow:hidden;
+    background:#0C0A08; box-shadow: 0 14px 34px -16px rgba(0,0,0,.7);
+  }
+  .shot-frame img{ display:block; width:100%; height:auto; }
+  .marker{
+    position:absolute; transform:translate(-50%,-50%);
+    width:26px; height:26px; border-radius:50%;
+    background:var(--note); color:#1A0F08; border:2px solid #1A0F08;
+    font-family:"IBM Plex Mono"; font-weight:600; font-size:.78rem;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--note) 45%, transparent), 0 3px 10px rgba(0,0,0,.5);
+  }
+  .shot-caption{ color:var(--text-faint); font-size:.76rem; margin-top:10px; }
+
+  /* ---- control reference cards ---- */
+  .col-heads{ display:grid; grid-template-columns:1fr 1fr; gap:22px; margin-top:36px; }
+  @media (max-width:760px){ .col-heads{ grid-template-columns:1fr; } }
+  .col-head{ font-family:"IBM Plex Mono"; font-size:.68rem; text-transform:uppercase; letter-spacing:.1em;
+    color:var(--note); border-bottom:1px solid var(--note-dim); padding-bottom:8px; margin-bottom:14px; }
+
+  .ctrl-grid{ display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width:760px){ .ctrl-grid{ grid-template-columns:1fr; } }
+  .ctrl{
+    display:flex; gap:12px; padding:14px 0; border-bottom:1px solid var(--border-soft);
+  }
+  .ctrl:last-child{ border-bottom:none; }
+  .ctrl .badge-num{
+    flex:none; width:26px; height:26px; border-radius:50%; background:var(--surface-2);
+    border:1px solid var(--note-dim); color:var(--note); font-family:"IBM Plex Mono"; font-weight:600;
+    font-size:.78rem; display:flex; align-items:center; justify-content:center; margin-top:2px;
+  }
+  .ctrl .c-name{ font-weight:600; font-size:.92rem; }
+  .ctrl .c-id{ font-family:"IBM Plex Mono"; font-size:.68rem; color:var(--text-faint); margin-left:8px; }
+  .ctrl .c-choices{ font-family:"IBM Plex Mono"; font-size:.72rem; color:var(--brass); margin-top:5px; line-height:1.6; }
+  .ctrl .c-desc{ color:var(--text-dim); font-size:.83rem; margin-top:6px; line-height:1.5; }
+  .ctrl .c-default{ font-family:"IBM Plex Mono"; font-size:.68rem; color:var(--sage); margin-top:5px; }
+
+  /* ---- backing-params table ---- */
+  .table-wrap{ overflow-x:auto; background:var(--surface); border:1px solid var(--border-soft); border-radius:8px; }
+  table{ width:100%; border-collapse:collapse; font-size:.82rem; }
+  th{ text-align:left; font-family:"IBM Plex Mono"; font-weight:500; font-size:.65rem; text-transform:uppercase;
+    letter-spacing:.08em; color:var(--text-faint); padding:10px 14px; border-bottom:1px solid var(--border); white-space:nowrap; }
+  td{ padding:9px 14px; border-bottom:1px solid var(--border-soft); vertical-align:top; }
+  tr:last-child td{ border-bottom:none; }
+  td.pid{ font-family:"IBM Plex Mono"; color:var(--brass); white-space:nowrap; }
+  td.range{ font-family:"IBM Plex Mono"; color:var(--text-faint); white-space:nowrap; font-size:.76rem; }
+  td.desc{ color:var(--text-dim); }
+  .section-note{ color:var(--text-dim); max-width:76ch; margin:-6px 0 22px; font-size:.9rem; }
+
+  /* ---- status readout callout ---- */
+  .readout-note{
+    display:flex; gap:14px; background:var(--surface); border:1px solid var(--border-soft); border-radius:8px;
+    padding:16px 18px; margin-top:8px; align-items:flex-start;
+  }
+  .readout-note .dot{ flex:none; width:9px; height:9px; border-radius:50%; background:var(--sage); margin-top:6px; }
+  .readout-note p{ margin:0; color:var(--text-dim); font-size:.87rem; }
+  .readout-note code{ font-family:"IBM Plex Mono"; color:var(--sage); font-size:.82rem; }
+
+  .chain-strip{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-family:"IBM Plex Mono"; font-size:.76rem; margin-top:6px; }
+  .chain-strip .hop{ padding:5px 11px; border-radius:5px; background:var(--surface-2); border:1px solid var(--border-soft); color:var(--text-dim); }
+  .chain-strip .hop.here{ background:color-mix(in srgb, var(--note) 20%, var(--surface-2)); border-color:var(--note-dim); color:var(--note); font-weight:600; }
+  .chain-strip .arrow{ color:var(--text-faint); }
+
+  footer{ margin-top:60px; padding-top:20px; border-top:1px solid var(--border); color:var(--text-faint); font-size:.76rem;
+    display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="crumbs">Orch System → Note Path → <b>OrchNoteMapper</b></div>
+
+  <div class="nameplate">
+    <div>
+      <h1>OrchNoteMapper</h1>
+      <div class="role">Per-instrument range fold, octave mapping, and keyswitch remap — the last stop before the instrument.</div>
+    </div>
+    <div class="badges">
+      <span class="badge chain">note path · step 5</span>
+      <span class="badge live">live</span>
+      <span class="badge plugin-code mono">Onmp</span>
+    </div>
+  </div>
+
+  <p class="lede">
+    OrchNoteMapper takes whatever range a note arrives in and folds it into <strong>this instrument's</strong> own
+    playable/sounding range, then optionally remaps a shared keyswitch vocabulary onto this instrument's own
+    articulation zone. It's the last Orch device on the note path — by the time MIDI leaves it, everything the
+    instrument's sample library actually needs to see should already be correct.
+  </p>
+
+  <div class="chain-strip">
+    <span class="hop">Source</span><span class="arrow">→</span>
+    <span class="hop">Randomize</span><span class="arrow">→</span>
+    <span class="hop">OrchNoteFilter</span><span class="arrow">→</span>
+    <span class="hop">OrchGate</span><span class="arrow">→</span>
+    <span class="hop here">OrchNoteMapper</span><span class="arrow">→</span>
+    <span class="hop">instrument</span>
+  </div>
+
+  <!-- ===================== SECTION 1: THE EDITOR ===================== -->
+  <div class="section-head"><span class="num">01</span><h2>The Editor</h2><div class="rule"></div></div>
+  <p class="section-note">
+    9 controls, two columns. Left half decides <strong>how a note's range gets folded</strong>; right half decides
+    <strong>whether/how a keyswitch gets remapped</strong>. The panel below the controls is a live readout, not
+    something you set directly — see §03.
+  </p>
+
+  <div class="shot-frame">
+    <img src="assets/orchnotemapper-editor.png" alt="OrchNoteMapper editor, real screenshot, with 9 numbered controls">
+    <div class="marker" style="left:24.0%; top:19.9%">1</div>
+    <div class="marker" style="left:24.0%; top:26.1%">2</div>
+    <div class="marker" style="left:24.0%; top:32.3%">3</div>
+    <div class="marker" style="left:24.0%; top:38.5%">4</div>
+    <div class="marker" style="left:24.0%; top:44.7%">5</div>
+    <div class="marker" style="left:77.6%; top:19.9%">6</div>
+    <div class="marker" style="left:77.6%; top:26.1%">7</div>
+    <div class="marker" style="left:77.6%; top:32.3%">8</div>
+    <div class="marker" style="left:77.6%; top:38.5%">9</div>
+  </div>
+  <div class="shot-caption">Real capture of the Standalone build, Phase 7D-9B — Range Source: Manual, no Instrument Preset selected.</div>
+
+  <!-- ===================== SECTION 2: CONTROLS ===================== -->
+  <div class="section-head"><span class="num">02</span><h2>The Controls</h2><div class="rule"></div></div>
+
+  <div class="col-heads">
+    <div class="col-head">Left — range folding</div>
+    <div class="col-head">Right — keyswitch remap</div>
+  </div>
+
+  <div class="ctrl-grid">
+    <div class="col">
+      <div class="ctrl">
+        <div class="badge-num">1</div>
+        <div>
+          <span class="c-name">Range Source</span><span class="c-id mono">rangeSource</span>
+          <div class="c-choices">Manual · Preset</div>
+          <div class="c-desc">Manual: you set the target range by hand (§03's Min/Max or Center/Span fields, via automation). Preset: the Instrument Preset below fills it in for you.</div>
+          <div class="c-default">default: Manual</div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="badge-num">2</div>
+        <div>
+          <span class="c-name">Range Mode</span><span class="c-id mono">rangeMode</span>
+          <div class="c-choices">Min/Max · Center/Span</div>
+          <div class="c-desc">Two ways to say the same target window: literal endpoints, or a center note plus how far it reaches either side.</div>
+          <div class="c-default">default: Min/Max</div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="badge-num">3</div>
+        <div>
+          <span class="c-name">Mapping Mode</span><span class="c-id mono">mappingMode</span>
+          <div class="c-choices">Clamp · Octave Fold</div>
+          <div class="c-desc">Clamp: a note outside the target range is pinned to the nearest edge. Octave Fold: it's transposed by whole octaves until it lands inside the range instead — keeps the note's pitch class, not just its register.</div>
+          <div class="c-default">default: Clamp</div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="badge-num">4</div>
+        <div>
+          <span class="c-name">Instrument Preset</span><span class="c-id mono">instrumentPreset</span>
+          <div class="c-choices">Custom, or one of 22 named instruments — Piccolo → Tubular Bells (full list §04)</div>
+          <div class="c-desc">Only takes effect when Range Source = Preset. Fills the target range with that instrument's real sounding range, sourced from the library's own practical playable span, not guessed.</div>
+          <div class="c-default">default: Custom</div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="badge-num">5</div>
+        <div>
+          <span class="c-name">Block Control CCs</span><span class="c-id mono">blockControlCcs</span>
+          <div class="c-choices">Off · CC 20-54 (OrchConductor) · CC 20-64 (OC + MPL)</div>
+          <div class="c-desc">Strips the ecosystem's own control-plane CCs before they reach the sample library — this is the last Orch device in the chain, so anything upstream has already consumed what it needed. Prevents e.g. HALion Sonic reading CC32 as Bank Select.</div>
+          <div class="c-default">default: Off</div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="ctrl">
+        <div class="badge-num">6</div>
+        <div>
+          <span class="c-name">Keyswitch Mode</span><span class="c-id mono">keyswitchMode</span>
+          <div class="c-choices">Off · Protect Only · Map Low to Destination · Map High to Destination · Map Low + High to Destination</div>
+          <div class="c-desc">Off: no keyswitch handling at all. Protect Only: keyswitch notes pass through untouched, just excluded from range folding. Map ...: a keyswitch inside the Low/High source window gets rewritten onto this instrument's own destination zone.</div>
+          <div class="c-default">default: Off</div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="badge-num">7</div>
+        <div>
+          <span class="c-name">KS Destination</span><span class="c-id mono">ksDestinationPreset</span>
+          <div class="c-choices">Custom, or a fixed octave band: 0-11 · 12-23 · 24-35 · 36-47 · 48-59 · 60-71 · 72-83 · 84-95 · 96-107 · 108-119</div>
+          <div class="c-desc">Where a mapped keyswitch lands. The ecosystem's shared source vocabulary is 12-23; most instruments destination into 24-35, low-range instruments (Contrabassoon, Double Bass) into 72-83.</div>
+          <div class="c-default">default: Custom</div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="badge-num">8</div>
+        <div>
+          <span class="c-name">Low KS Protect</span><span class="c-id mono">lowKsProtect</span>
+          <div class="c-choices">Off · On</div>
+          <div class="c-desc">Guards the low keyswitch window (source/destination values live in §03's readout, host-automatable) from being swept up by ordinary range folding.</div>
+          <div class="c-default">default: Off</div>
+        </div>
+      </div>
+      <div class="ctrl">
+        <div class="badge-num">9</div>
+        <div>
+          <span class="c-name">High KS Protect</span><span class="c-id mono">highKsProtect</span>
+          <div class="c-choices">Off · On</div>
+          <div class="c-desc">Same guard, for the high keyswitch window — the two are independent so an instrument can have keyswitches at both ends, or just one.</div>
+          <div class="c-default">default: Off</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== SECTION 3: STATUS READOUT ===================== -->
+  <div class="section-head"><span class="num">03</span><h2>The Status Readout</h2><div class="rule"></div></div>
+  <p class="section-note">The panel below the controls in the screenshot — read-only, live. It's how you confirm what's actually happening, and where the geometry params below (§04) become visible even though most have no dedicated dial.</p>
+
+  <div class="readout-note">
+    <div class="dot"></div>
+    <p><code>Active Target Range</code> is the range folding actually resolves to right now — the one number that matters if Range Source/Mode/Preset together aren't doing what you expect. <code>Last Note</code> / <code>Last KS</code> at the bottom are the most recent input/output pair seen — the fastest way to confirm a mapping live, without opening a DAW meter.</p>
+  </div>
+
+  <!-- ===================== SECTION 4: BACKING PARAMETERS ===================== -->
+  <div class="section-head"><span class="num">04</span><h2>Backing Parameters</h2><div class="rule"></div></div>
+  <p class="section-note">
+    12 more real parameters with <strong>no dedicated on-screen dial</strong> — visible only in §03's readout, but
+    fully host-automatable (draw an automation lane in Bitwig, or let Range Source = Preset fill them for you). This
+    is the layer most people never think to look for, so it's worth listing explicitly rather than leaving it a
+    mystery why a number changes on its own.
+  </p>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Parameter</th><th>Range</th><th>Default</th><th>Sets</th></tr></thead>
+      <tbody>
+        <tr><td class="pid">minNote</td><td class="range">0–127</td><td class="range">36</td><td class="desc">Manual target range, low edge (Range Mode = Min/Max)</td></tr>
+        <tr><td class="pid">maxNote</td><td class="range">0–127</td><td class="range">84</td><td class="desc">Manual target range, high edge (Range Mode = Min/Max)</td></tr>
+        <tr><td class="pid">centerNote</td><td class="range">0–127</td><td class="range">60</td><td class="desc">Manual target range center (Range Mode = Center/Span)</td></tr>
+        <tr><td class="pid">windowSpan</td><td class="range">0–127</td><td class="range">24</td><td class="desc">Manual target range width around the center (Range Mode = Center/Span)</td></tr>
+        <tr><td class="pid">lowKsMax</td><td class="range">0–127</td><td class="range">35</td><td class="desc">Upper bound of "low" for range-folding purposes, once Low KS Protect is on</td></tr>
+        <tr><td class="pid">lowKsSourceMin / lowKsSourceMax</td><td class="range">0–127</td><td class="range">12 / 23</td><td class="desc">The shared low-keyswitch window this instrument listens for (ecosystem default 12–23)</td></tr>
+        <tr><td class="pid">lowKsDestinationMin</td><td class="range">0–127</td><td class="range">24</td><td class="desc">Where a matched low keyswitch gets rewritten to</td></tr>
+        <tr><td class="pid">highKsMin</td><td class="range">0–127</td><td class="range">96</td><td class="desc">Lower bound of "high" for range-folding purposes, once High KS Protect is on</td></tr>
+        <tr><td class="pid">highKsSourceMin / highKsSourceMax</td><td class="range">0–127</td><td class="range">96 / 107</td><td class="desc">The shared high-keyswitch window this instrument listens for</td></tr>
+        <tr><td class="pid">highKsDestinationMin</td><td class="range">0–127</td><td class="range">24</td><td class="desc">Where a matched high keyswitch gets rewritten to</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ===================== SECTION 5: INSTRUMENT PRESETS ===================== -->
+  <div class="section-head"><span class="num">05</span><h2>Instrument Presets</h2><div class="rule"></div></div>
+  <p class="section-note">The full list behind control 4, for when Range Source = Preset. Each fills the target range from that instrument's real practical sounding range.</p>
+  <div class="chain-strip" style="gap:6px 8px">
+    <span class="hop">Piccolo</span><span class="hop">Flute</span><span class="hop">Oboe</span><span class="hop">English Horn</span>
+    <span class="hop">Clarinet</span><span class="hop">Bass Clarinet</span><span class="hop">Bassoon</span><span class="hop">Contrabassoon</span>
+    <span class="hop">French Horn</span><span class="hop">Trumpet</span><span class="hop">Trombone</span><span class="hop">Bass Trombone</span>
+    <span class="hop">Tuba</span><span class="hop">Timpani</span><span class="hop">Violin</span><span class="hop">Viola</span>
+    <span class="hop">Cello</span><span class="hop">Double Bass</span><span class="hop">Glockenspiel</span><span class="hop">Xylophone</span>
+    <span class="hop">Marimba</span><span class="hop">Vibraphone</span><span class="hop">Tubular Bells</span>
+  </div>
+
+  <footer>
+    <span>Source: <span class="mono">Source/PluginProcessor.cpp</span>, <span class="mono">createParameterLayout()</span> — regenerate this table if that function changes.</span>
+    <span>OrchNoteMapper · <span class="mono">johnpascu77-dotcom</span></span>
+  </footer>
+
+</div>
+</body>
+</html>

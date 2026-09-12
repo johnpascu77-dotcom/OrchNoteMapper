@@ -10,7 +10,7 @@ juce_add_plugin(OrchNoteMapper
     PLUGIN_MANUFACTURER_CODE Jpas
     PLUGIN_CODE Onmp
 
-    FORMATS VST3
+    FORMATS VST3 Standalone
 
     PRODUCT_NAME "OrchNoteMapper"
     PLUGIN_NAME "OrchNoteMapper"

@@ -2,6 +2,21 @@
 
 project(OrchNoteMapper VERSION 0.1.0)
 
+# Build-timestamp label (see cmake/GenerateOrchNoteMapperBuildInfo.cmake): a
+# plain custom target with no OUTPUT/DEPENDS tracking, so it reruns and
+# rewrites the header on every single build, not just every configure or only
+# when a source file happens to change.
+set(OrchNoteMapperGeneratedDir "${CMAKE_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${OrchNoteMapperGeneratedDir}")
+
+add_custom_target(OrchNoteMapperGenerateBuildInfo ALL
+    COMMAND ${CMAKE_COMMAND}
+        "-DOUTPUT_FILE=${OrchNoteMapperGeneratedDir}/OrchNoteMapperBuildInfo.h"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/GenerateOrchNoteMapperBuildInfo.cmake"
+    BYPRODUCTS "${OrchNoteMapperGeneratedDir}/OrchNoteMapperBuildInfo.h"
+    COMMENT "Stamping OrchNoteMapper build timestamp"
+)
+
 # Path to your JUCE folder.
 add_subdirectory("C:/JUCE/JUCE" JUCE)
 
@@ -30,6 +45,9 @@ target_sources(OrchNoteMapper
         Source/PluginProcessor.cpp
         Source/PluginEditor.cpp
 )
+
+add_dependencies(OrchNoteMapper OrchNoteMapperGenerateBuildInfo)
+target_include_directories(OrchNoteMapper PRIVATE ${OrchNoteMapperGeneratedDir})
 
 target_compile_definitions(OrchNoteMapper
     PUBLIC

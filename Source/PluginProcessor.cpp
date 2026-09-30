@@ -5,7 +5,8 @@ OrchNoteMapperAudioProcessor::OrchNoteMapperAudioProcessor()
     : AudioProcessor (BusesProperties()),
       parameters (*this, nullptr, "PARAMETERS", createParameterLayout())
 {
-    activeNoteMap.fill (-1);
+    for (auto& queue : activeNoteMap)
+        queue.clear();
 }
 
 OrchNoteMapperAudioProcessor::~OrchNoteMapperAudioProcessor()
@@ -152,6 +153,88 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchNoteMapperAudioProcessor
         0
     ));
 
+    // Live-CC destination-bank select (2026-09-24). When enabled, a MIDI CC
+    // (e.g. an arc-driven CC from OrchConductor) picks which consecutive run
+    // of ksBankCount preset bands - starting at whichever band the KS
+    // Destination dropdown above is set to - is currently in effect, instead
+    // of the dropdown alone. Only takes effect when the dropdown is on a real
+    // band (not "Custom"); see resolveEffectiveKsPresetIndex().
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "ksBankCcEnable", 1 },
+        "KS Bank CC Enable",
+        onOffChoices,
+        0
+    ));
+
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ksBankCcNumber", 1 },
+        "KS Bank CC Number",
+        0,
+        127,
+        70
+    ));
+
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ksBankCount", 1 },
+        "KS Bank Count",
+        1,
+        10,
+        1
+    ));
+
+    // Per-instrument stagger against a shared broadcast CC - see
+    // resolveEffectiveKsPresetIndex()'s own comment.
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ksBankCcOffset", 1 },
+        "KS Bank CC Offset",
+        -63,
+        63,
+        0
+    ));
+
+    // KS generator (2026-09-24). Replaces the manual per-track "KS-only clip
+    // + Randomize Pitch device" liveliness setup, which only works in Clip
+    // Launcher mode - an Arranger timeline has no equivalent without
+    // duplicating that clip by hand across the whole piece on every track.
+    // See runKeyswitchGenerator()'s own comment.
+    params.push_back (std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID { "ksGenEnable", 1 },
+        "KS Generator Enable",
+        onOffChoices,
+        0
+    ));
+
+    params.push_back (std::make_unique<juce::AudioParameterFloat>(
+        juce::ParameterID { "ksGenIntervalSeconds", 1 },
+        "KS Generator Interval",
+        juce::NormalisableRange<float> (0.25f, 8.0f),
+        2.0f
+    ));
+
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ksGenProbabilityPercent", 1 },
+        "KS Generator Probability",
+        0,
+        100,
+        70
+    ));
+
+    // 0 = auto (match whatever channel the last real incoming note used).
+    // 1-16 = force this channel regardless of real traffic. Auto alone isn't
+    // reliable when no real note has arrived yet to learn a channel from -
+    // live-rig bug (2026-09-25/26): an instrument with no real melodic
+    // content flowing (or none yet, early in playback) never updates
+    // lastSeenChannel away from its channel-1 default, so its generator kept
+    // misdelivering to whatever OTHER instrument's Opus instance was on
+    // channel 1. An explicit override removes the timing dependency entirely.
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "ksGenChannelOverride", 1 },
+        "KS Generator Channel (0 = auto)",
+        0,
+        16,
+        0
+    ));
+
     params.push_back (std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { "lowKsProtect", 1 },
         "Low KS Protect",
@@ -191,6 +274,31 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchNoteMapperAudioProcessor
         24
     ));
 
+    // 2026-09-28 live-rig bug: with KS Destination on a fixed preset (e.g.
+    // "24 - 35"), a low instrument whose own real playable range reaches
+    // down into that band (Bass Clarinet/Bassoon/Contrabassoon can start as
+    // low as 34-36) has generated/forwarded keyswitches land on genuinely
+    // audible pitches in Opus - not a routing bug, the destination band
+    // itself overlapped the instrument's own real notes. The fixed 12-note
+    // presets can't dodge this (there's no "0 - 33" preset), and Custom mode
+    // previously had no independent ceiling at all - the destination window's
+    // width was silently pinned to whatever the Source Min/Max span happened
+    // to be (see mapLowKeyswitchNoteToDestination's own offset math). This
+    // gives Custom mode a real, explicit ceiling: mapLowKeyswitchNoteToDestination
+    // clamps its output into [lowKsDestinationMin, lowKsDestinationMax]
+    // whenever the preset is Custom, so an instrument's own lowest playable
+    // notes can always be explicitly excluded. Defaults to 35 - the exact
+    // ceiling the default Low KS Source Min/Max (12-23, a 12-note span) already
+    // produced under the old offset-only math - so nothing changes for anyone
+    // who hasn't touched these settings.
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "lowKsDestinationMax", 1 },
+        "Low KS Destination Max",
+        0,
+        127,
+        35
+    ));
+
     params.push_back (std::make_unique<juce::AudioParameterChoice>(
         juce::ParameterID { "highKsProtect", 1 },
         "High KS Protect",
@@ -228,6 +336,18 @@ juce::AudioProcessorValueTreeState::ParameterLayout OrchNoteMapperAudioProcessor
         0,
         127,
         24
+    ));
+
+    // Same story as lowKsDestinationMax above, High side. Defaults to 35 for
+    // the same reason - the default High KS Source Min/Max (96-107, also a
+    // 12-note span) already produced this exact ceiling under the old
+    // offset-only math.
+    params.push_back (std::make_unique<juce::AudioParameterInt>(
+        juce::ParameterID { "highKsDestinationMax", 1 },
+        "High KS Destination Max",
+        0,
+        127,
+        35
     ));
 
     // Scrub the OrchConductor / MPL control-CC zone from the output so it never
@@ -297,13 +417,20 @@ void OrchNoteMapperAudioProcessor::changeProgramName (int index, const juce::Str
 
 void OrchNoteMapperAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBlock)
 {
-    juce::ignoreUnused (sampleRate, samplesPerBlock);
-    activeNoteMap.fill (-1);
+    juce::ignoreUnused (samplesPerBlock);
+    currentSampleRate = sampleRate > 0.0 ? sampleRate : 44100.0;
+    for (auto& queue : activeNoteMap)
+        queue.clear();
+    ksGenSecondsUntilNextTick = 0.0;
+    ksGenSecondsUntilNoteOff = 0.0;
+    ksGenPendingOutputNote = -1;
 }
 
 void OrchNoteMapperAudioProcessor::releaseResources()
 {
-    activeNoteMap.fill (-1);
+    for (auto& queue : activeNoteMap)
+        queue.clear();
+    ksGenPendingOutputNote = -1;
 }
 
 bool OrchNoteMapperAudioProcessor::isBusesLayoutSupported (const BusesLayout& layouts) const
@@ -326,6 +453,13 @@ int OrchNoteMapperAudioProcessor::getParameterIntValue (const juce::String& para
         return intParameter->get();
 
     return fallback;
+}
+
+float OrchNoteMapperAudioProcessor::getParameterFloatValue (const juce::String& parameterID, float fallback) const
+{
+    auto* floatParameter = dynamic_cast<juce::AudioParameterFloat*> (parameters.getParameter (parameterID));
+
+    return floatParameter != nullptr ? floatParameter->get() : fallback;
 }
 
 
@@ -523,9 +657,50 @@ bool OrchNoteMapperAudioProcessor::isLowKeyswitchSourceNote (int noteNumber) con
     return noteNumber >= sourceMin && noteNumber <= sourceMax;
 }
 
-int OrchNoteMapperAudioProcessor::getEffectiveKeyswitchDestinationMin (int fallbackDestinationMin) const
+int OrchNoteMapperAudioProcessor::resolveEffectiveKsPresetIndex() const
 {
     const int presetIndex = getParameterIntValue ("ksDestinationPreset", 0);
+
+    // "Custom" means the manual lowKsDestinationMin/highKsDestinationMin
+    // fields govern instead - there's no fixed band to offset a CC-selected
+    // bank from, so CC-bank mode has nothing to do here.
+    if (presetIndex <= 0)
+        return 0;
+
+    const bool bankCcEnabled = getParameterIntValue ("ksBankCcEnable", 0) == 1;
+
+    if (! bankCcEnabled)
+        return presetIndex;
+
+    const int rawCcValue = lastKsBankCcValue.load();
+
+    // No CC seen yet since load - fall back to whatever band the dropdown
+    // itself is set to, same "use the configured default" reasoning as the
+    // dropdown's own preset system, not a hard gate like OrchGate's CC.
+    if (rawCcValue < 0)
+        return presetIndex;
+
+    // Per-instrument offset applied before resolving the band, so several
+    // instruments can share one literal broadcast CC (from OrchConductor,
+    // driven by a single MC arc) while still crossing the Layer 1/Layer 3
+    // boundary at different points along that same arc - staggered section
+    // character instead of the whole orchestra switching in lockstep. Same
+    // principle as OrchGate's own Conductor Response Bridge, just a direct
+    // manual dial here rather than an auto-derived seed.
+    const int ccOffset = getParameterIntValue ("ksBankCcOffset", 0);
+    const int ccValue = juce::jlimit (0, 127, rawCcValue + ccOffset);
+
+    const int bankCount = juce::jlimit (1, 10, getParameterIntValue ("ksBankCount", 1));
+    const int zoneIndex = juce::jlimit (0, bankCount - 1, (ccValue * bankCount) / 128);
+
+    // presetIndex is the starting band; an overflowing zoneIndex just clamps
+    // to the last real band (108-119) rather than wrapping or going invalid.
+    return juce::jlimit (1, 10, presetIndex + zoneIndex);
+}
+
+int OrchNoteMapperAudioProcessor::getEffectiveKeyswitchDestinationMin (int fallbackDestinationMin) const
+{
+    const int presetIndex = resolveEffectiveKsPresetIndex();
 
     if (presetIndex <= 0)
         return juce::jlimit (0, 127, fallbackDestinationMin);
@@ -534,6 +709,17 @@ int OrchNoteMapperAudioProcessor::getEffectiveKeyswitchDestinationMin (int fallb
 
     return juce::jlimit (0, 127, presetStart);
 }
+
+// 2026-09-28: only meaningful on the Custom path - see lowKsDestinationMax's
+// own doc comment in createParameterLayout for the live-rig bug this fixes.
+// A fixed preset (24-35 etc.) is always exactly 12 notes wide already, so it
+// has no separate ceiling to enforce beyond what resolveEffectiveKsPresetIndex
+// already pins down; callers only ever consult this when presetIndex<=0.
+int OrchNoteMapperAudioProcessor::getEffectiveKeyswitchDestinationMax (int fallbackDestinationMax) const
+{
+    return juce::jlimit (0, 127, fallbackDestinationMax);
+}
+
 int OrchNoteMapperAudioProcessor::mapLowKeyswitchNoteToDestination (int noteNumber) const
 {
     auto* lowKsSourceMinParam = dynamic_cast<juce::AudioParameterInt*> (
@@ -549,6 +735,20 @@ int OrchNoteMapperAudioProcessor::mapLowKeyswitchNoteToDestination (int noteNumb
     const int destinationMin = getEffectiveKeyswitchDestinationMin (lowKsDestinationMinParam->get());
 
     const int mappedNote = destinationMin + (noteNumber - sourceMin);
+
+    // Custom mode only (a fixed preset is already exactly 12 notes wide, see
+    // getEffectiveKeyswitchDestinationMax's own comment) - clamp to the
+    // user's own explicit ceiling rather than letting the offset transform
+    // run past it, which is exactly how a low instrument's own real playable
+    // notes (Bass Clarinet/Bassoon/Contrabassoon can start as low as 34-36)
+    // ended up receiving generated/forwarded keyswitches as audible pitches
+    // in Opus (Docs 2026-09-28).
+    if (resolveEffectiveKsPresetIndex() <= 0)
+    {
+        const int destinationMax = getEffectiveKeyswitchDestinationMax (
+            getParameterIntValue ("lowKsDestinationMax", 35));
+        return juce::jlimit (0, 127, juce::jlimit (destinationMin, juce::jmax (destinationMin, destinationMax), mappedNote));
+    }
 
     return juce::jlimit (0, 127, mappedNote);
 }
@@ -687,8 +887,142 @@ int OrchNoteMapperAudioProcessor::mapHighKeyswitchNoteToDestination (int noteNum
 
     const int mappedNote = destinationMin + (noteNumber - sourceMin);
 
+    // Same Custom-mode ceiling as mapLowKeyswitchNoteToDestination's own
+    // comment above.
+    if (resolveEffectiveKsPresetIndex() <= 0)
+    {
+        const int destinationMax = getEffectiveKeyswitchDestinationMax (
+            getParameterIntValue ("highKsDestinationMax", 35));
+        return juce::jlimit (0, 127, juce::jlimit (destinationMin, juce::jmax (destinationMin, destinationMax), mappedNote));
+    }
+
     return juce::jlimit (0, 127, mappedNote);
 }
+bool OrchNoteMapperAudioProcessor::isLowKeyswitchGenerationAvailable() const
+{
+    // Same gate as isLowKeyswitchSourceNote(), minus the note-in-range check -
+    // no point generating into a zone nothing is going to map.
+    const int keyswitchMode = getParameterIntValue ("keyswitchMode", 0);
+    const bool lowKsEnabled = getParameterIntValue ("lowKsProtect", 0) == 1;
+    const bool lowMappingMode = keyswitchMode == 2 || keyswitchMode == 4;
+
+    return lowMappingMode && lowKsEnabled;
+}
+
+bool OrchNoteMapperAudioProcessor::isHighKeyswitchGenerationAvailable() const
+{
+    const int keyswitchMode = getParameterIntValue ("keyswitchMode", 0);
+    const bool highKsEnabled = getParameterIntValue ("highKsProtect", 0) == 1;
+    const bool highMappingMode = keyswitchMode == 3 || keyswitchMode == 4;
+
+    return highMappingMode && highKsEnabled;
+}
+
+void OrchNoteMapperAudioProcessor::runKeyswitchGenerator (juce::MidiBuffer& outputBuffer, int numSamples)
+{
+    const bool genEnabled = getParameterIntValue ("ksGenEnable", 0) == 1;
+
+    if (! genEnabled)
+    {
+        // Turned off mid-note - release cleanly rather than leaving Opus
+        // holding a note nobody will ever turn off.
+        if (ksGenPendingOutputNote >= 0)
+        {
+            outputBuffer.addEvent (juce::MidiMessage::noteOff (ksGenPendingOutputChannel, ksGenPendingOutputNote), 0);
+            ksGenPendingOutputNote = -1;
+        }
+
+        return;
+    }
+
+    bool isPlaying = false;
+
+    if (auto* currentPlayHead = getPlayHead())
+        if (auto position = currentPlayHead->getPosition())
+            isPlaying = position->getIsPlaying();
+
+    // Don't spam KS notes into Opus while the transport is stopped and the
+    // user is just sitting there editing/auditioning by hand.
+    if (! isPlaying)
+        return;
+
+    const double secondsThisBlock = (double) numSamples / currentSampleRate;
+
+    if (ksGenPendingOutputNote >= 0)
+    {
+        ksGenSecondsUntilNoteOff -= secondsThisBlock;
+
+        if (ksGenSecondsUntilNoteOff <= 0.0)
+        {
+            outputBuffer.addEvent (juce::MidiMessage::noteOff (ksGenPendingOutputChannel, ksGenPendingOutputNote), 0);
+            ksGenPendingOutputNote = -1;
+        }
+    }
+
+    ksGenSecondsUntilNextTick -= secondsThisBlock;
+
+    if (ksGenSecondsUntilNextTick > 0.0)
+        return;
+
+    const double intervalSeconds = (double) getParameterFloatValue ("ksGenIntervalSeconds", 2.0f);
+
+    // +/-30% jitter so the pulse doesn't feel mechanically regular - same
+    // "orchestra feels alive" goal the old Randomize-Pitch-device rig had.
+    const double jitter = 0.7 + ksGenRandom.nextDouble() * 0.6;
+    ksGenSecondsUntilNextTick = juce::jmax (0.1, intervalSeconds * jitter);
+
+    const int probabilityPercent = juce::jlimit (0, 100, getParameterIntValue ("ksGenProbabilityPercent", 70));
+
+    if (ksGenRandom.nextInt (100) >= probabilityPercent)
+        return; // this tick rolled a miss - already rescheduled above
+
+    const bool lowAvailable = isLowKeyswitchGenerationAvailable();
+    const bool highAvailable = isHighKeyswitchGenerationAvailable();
+
+    if (! lowAvailable && ! highAvailable)
+        return;
+
+    const bool useLow = lowAvailable && (! highAvailable || ksGenRandom.nextBool());
+
+    const int sourceMin = getParameterIntValue (useLow ? "lowKsSourceMin" : "highKsSourceMin", useLow ? 12 : 96);
+    const int sourceMax = getParameterIntValue (useLow ? "lowKsSourceMax" : "highKsSourceMax", useLow ? 23 : 107);
+
+    if (sourceMin > sourceMax)
+        return;
+
+    // This generator only ever holds one note at a time - release any still
+    // pending (should be rare; the note-off above already handles the common
+    // case) before starting a new one.
+    if (ksGenPendingOutputNote >= 0)
+    {
+        outputBuffer.addEvent (juce::MidiMessage::noteOff (ksGenPendingOutputChannel, ksGenPendingOutputNote), 0);
+        ksGenPendingOutputNote = -1;
+    }
+
+    const int generatedSourceNote = sourceMin + ksGenRandom.nextInt (sourceMax - sourceMin + 1);
+
+    const int mappedNote = useLow
+        ? mapLowKeyswitchNoteToDestination (generatedSourceNote)
+        : mapHighKeyswitchNoteToDestination (generatedSourceNote);
+
+    const int channelOverride = getParameterIntValue ("ksGenChannelOverride", 0);
+    const int targetChannel = channelOverride > 0
+        ? juce::jlimit (1, 16, channelOverride)
+        : juce::jlimit (1, 16, lastSeenChannel);
+
+    outputBuffer.addEvent (juce::MidiMessage::noteOn (targetChannel, mappedNote, (juce::uint8) 100), 0);
+
+    lastKeyswitchInputNoteForDebug.store (generatedSourceNote);
+    lastKeyswitchOutputNoteForDebug.store (mappedNote);
+    lastKeyswitchRoleForDebug.store (2);
+    lastGeneratedKeyswitchNoteForUi.store (mappedNote);
+    lastGeneratedKeyswitchChannelForUi.store (targetChannel);
+
+    ksGenPendingOutputNote = mappedNote;
+    ksGenPendingOutputChannel = targetChannel;
+    ksGenSecondsUntilNoteOff = 0.1; // a brief keyswitch "press", not a held note
+}
+
 bool OrchNoteMapperAudioProcessor::isProtectedKeyswitchNote (int noteNumber) const
 {
     const int keyswitchMode = getParameterIntValue ("keyswitchMode", 0);
@@ -728,6 +1062,8 @@ void OrchNoteMapperAudioProcessor::processMidiAndClearAudio (juce::AudioBuffer<F
 
     juce::MidiBuffer processedMidi;
 
+    runKeyswitchGenerator (processedMidi, buffer.getNumSamples());
+
     for (const auto metadata : midiMessages)
     {
         const auto message = metadata.getMessage();
@@ -736,6 +1072,7 @@ void OrchNoteMapperAudioProcessor::processMidiAndClearAudio (juce::AudioBuffer<F
         if (message.isNoteOn())
         {
             const int channel = message.getChannel();
+            lastSeenChannel = channel;
             const int inputNote = message.getNoteNumber();
             const int activeMin = getActiveMinNote();
             const int activeMax = getActiveMaxNote();
@@ -805,7 +1142,7 @@ void OrchNoteMapperAudioProcessor::processMidiAndClearAudio (juce::AudioBuffer<F
                 lastKeyswitchRoleForDebug.store (midiRoleForDebug);
             }
 
-            activeNoteMap[(size_t) getNoteMapIndex (channel, inputNote)] = outputNote;
+            activeNoteMap[(size_t) getNoteMapIndex (channel, inputNote)].push_back (outputNote);
 
             auto mappedMessage = juce::MidiMessage::noteOn (channel,
                                                             outputNote,
@@ -817,11 +1154,19 @@ void OrchNoteMapperAudioProcessor::processMidiAndClearAudio (juce::AudioBuffer<F
             const int channel = message.getChannel();
             const int inputNote = message.getNoteNumber();
             const int mapIndex = getNoteMapIndex (channel, inputNote);
-            const int rememberedOutputNote = activeNoteMap[(size_t) mapIndex];
+            auto& queue = activeNoteMap[(size_t) mapIndex];
 
-            int outputNote = rememberedOutputNote;
+            int outputNote;
 
-            if (outputNote < 0)
+            if (! queue.empty())
+            {
+                // FIFO: the OLDEST still-open occurrence of this (channel,
+                // input note) - see activeNoteMap's own doc comment in the
+                // header for why this can't just be "the" remembered note.
+                outputNote = queue.front();
+                queue.erase (queue.begin());
+            }
+            else
             {
                 if (isLowKeyswitchSourceNote (inputNote))
                     outputNote = mapLowKeyswitchNoteToDestination (inputNote);
@@ -832,7 +1177,6 @@ void OrchNoteMapperAudioProcessor::processMidiAndClearAudio (juce::AudioBuffer<F
                 else
                     outputNote = clampNoteToActiveRange (inputNote);
             }
-activeNoteMap[(size_t) mapIndex] = -1;
 
             auto mappedMessage = juce::MidiMessage::noteOff (channel,
                                                              outputNote,
@@ -841,17 +1185,28 @@ activeNoteMap[(size_t) mapIndex] = -1;
         }
         else if (message.isAllNotesOff() || message.isAllSoundOff())
         {
-            activeNoteMap.fill (-1);
+            for (auto& queue : activeNoteMap)
+                queue.clear();
+            ksGenPendingOutputNote = -1; // already silenced - no note-off of our own to chase
             processedMidi.addEvent (message, samplePosition);
         }
         else if (message.isController())
         {
+            const int cc = message.getControllerNumber();
+            const bool bankCcEnabled = getParameterIntValue ("ksBankCcEnable", 0) == 1;
+            const int ksBankCcNumber = getParameterIntValue ("ksBankCcNumber", 70);
+
+            if (cc == ksBankCcNumber)
+                lastKsBankCcValue.store (message.getControllerValue());
+
+            if (bankCcEnabled && cc == ksBankCcNumber)
+                continue; // consumed here to select the destination bank - never forwarded to the instrument
+
             const int blockMode = getParameterIntValue ("blockControlCcs", 0);
 
             if (blockMode > 0)
             {
                 const int hi = blockMode == 1 ? 54 : 64;
-                const int cc = message.getControllerNumber();
 
                 if (cc >= 20 && cc <= hi)
                     continue; // scrubbed before the instrument

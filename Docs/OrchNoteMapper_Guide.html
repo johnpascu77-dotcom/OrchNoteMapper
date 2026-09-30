@@ -281,6 +281,17 @@
     <div class="dot"></div>
     <p><code>Active Target Range</code> is the range folding actually resolves to right now — the one number that matters if Range Source/Mode/Preset together aren't doing what you expect. <code>Last Note</code> / <code>Last KS</code> at the bottom are the most recent input/output pair seen — the fastest way to confirm a mapping live, without opening a DAW meter.</p>
   </div>
+  <div class="readout-note">
+    <div class="dot"></div>
+    <p>Internally, the input→output mapping for each (channel, note) is now a small FIFO queue, not a single
+    remembered value — a real live-rig bug (2026-09-28): two overlapping same-(channel, pitch) note-ons (a genuine
+    legato re-strike, or upstream relayed content that wasn't truly monophonic) used to have the second note-on
+    silently overwrite the first's own remembered output pitch, so one of the two real note-offs resolved to the
+    wrong mapping and left a voice stuck downstream — exactly the pattern <a href="../../OrchGate/Docs/OrchGate_Guide.html" style="color:var(--sage)">OrchGate's own stuck-note watchdog</a>
+    kept having to recover. Note-on pushes, note-off pops the oldest entry, so N overlapping occurrences now always
+    resolve to N correctly-paired note-offs. No control for this — it's always on, and there's nothing to
+    configure.</p>
+  </div>
 
   <!-- ===================== SECTION 4: BACKING PARAMETERS ===================== -->
   <div class="section-head"><span class="num">04</span><h2>Backing Parameters</h2><div class="rule"></div></div>
